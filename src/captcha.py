@@ -8,10 +8,10 @@ import numpy as np
 
 class SimpleCaptcha(object):
     def __init__(self, fonts):
-        self._width = 136
-        self._height = 50
+        self._width = 68
+        self._height = 25
         self._fonts = [font for font in fonts if 'PublicSans-SemiBoldItalic' in font]
-        self.font_sizes = 42
+        self.font_sizes = 19
         self.truefonts = [
             truetype(n, self.font_sizes)
             for n in self._fonts
@@ -68,62 +68,74 @@ class SimpleCaptcha(object):
             width=1, fill=color
         )
 
+    def add_frame(self, image, draw):
+        c1 = (199, 172, 202)
+        c2 = (206, 213, 205)
+        c3 = (156, 169, 154)
+        # top line
+        for x in range(self._width):
+            if x % 2 == 0:
+                draw.point((x, 0), fill=c1)
+                draw.point((x, self._height - 1), fill=c1)
+            else:
+                draw.point((x, 0), fill=c2)
+                draw.point((x, self._height - 1), fill=c2)
+        # left line
+        for y in range(1, self._height):
+            if y % 2 == 0:
+                draw.point((0, y), fill=random.choice([c1, c3]))
+                draw.point((self._width - 1, y), fill=random.choice([c1, c3]))
+            else:
+                draw.point((0, y), fill=c2)
+                draw.point((self._width - 1, y), fill=c2)
+
     def add_dot_noise(self, image, draw):
         color = self.random_dot_color()
-        x1 = random.randint(-40, self._width)
-        y1 = random.randint(-40, self._height)
-        '''
-        x2 = x1 + 1
-        y2 = y1 + 1
-        draw.ellipse(
+        x1 = random.randint(0, self._width)
+        y1 = random.randint(0, self._height)
+        draw.point(
             [
-                x1, y1, x2, y2,
+                x1, y1,
             ],
-            width=1, fill=color
+            fill=color
         )
-        '''
-        font = truetype(self._fonts[0], random.randint(6, 32))
-        draw.text((x1, y1), '.', font=font, fill=color)
 
     def create_captcha_image(self, chars):
         image = self.background(self._width, self._height)
 
         draw = Draw(image)
-        for i in range(45):
+        for i in range(30):
             self.add_line_noise(image, draw)
 
-        r_arr = [20, 50, 80, 100, 110]
-        g_arr = [50, 50, 20, 20, 20]
-        b_arr = [216, 180, 120, 70, 50]
+        self.add_frame(image, draw)
+        r_arr = [0, 44, 44, 93, 93]
+        g_arr = [20, 15, 15, 15, 15]
+        b_arr = [196, 147, 147, 98, 50]
 
-        for i in range(100):
-            self.add_dot_noise(image, draw)
-        # image = image.filter(ImageFilter.SMOOTH)
-        y = random.randint(-2, 4)
-        base_x = random.randint(2, 4)
+        y = random.randint(-2, 2)
+        base_x = random.randint(1, 2)
         font = random.choice(self.truefonts)
         for i, c in enumerate(chars):
-            r = int(min(max(0, r_arr[i] + random.normalvariate(20, 10)), 255))
-            g = int(min(max(0, g_arr[i] + random.normalvariate(20, 10)), 255))
-            b = int(min(max(0, b_arr[i] + random.normalvariate(20, 10)), 255))
+            r = int(min(max(0, r_arr[i] + random.normalvariate(10, 10)), 255))
+            g = int(min(max(0, g_arr[i] + random.normalvariate(10, 10)), 255))
+            b = int(min(max(0, b_arr[i] + random.normalvariate(10, 10)), 255))
             img = self._generate_char(c, color=(r, g, b), draw=draw, font=font)
 
             w, h = img.size
-            x = base_x + i * 23 + random.randint(-4, 4)
+            x = base_x + i * 12 + random.randint(-1, 1)
             image.paste(img, (x, y), mask=img)  # alpha = 0
 
-        for i in range(200):
-            self.add_dot_noise(image, draw)
-        for i in range(15):
-            self.add_line_noise(image, draw)
+        image = image.resize((self._width * 10, self._height * 10), PIL.Image.BICUBIC)
+        # image = image.filter(ImageFilter.GaussianBlur(1))
+        # image = image.filter(ImageFilter.SHARPEN)
+        # image = image.filter(ImageFilter.SHARPEN)
+        # image = image.filter(ImageFilter.SHARPEN)
+        image = image.resize((self._width, self._height), PIL.Image.BICUBIC)
+        draw = Draw(image)
 
-        image = image.resize((68 * 10, 25 * 10), PIL.Image.BICUBIC)
-        image = image.filter(ImageFilter.GaussianBlur(1))
-        image = image.filter(ImageFilter.SHARPEN)
-        image = image.filter(ImageFilter.SHARPEN)
-        image = image.filter(ImageFilter.SHARPEN)
-        # image = image.resize((68, 25), PIL.Image.BICUBIC)
-        image = image.resize((610, 224), PIL.Image.BICUBIC)
+        for i in range(400):
+            self.add_dot_noise(image, draw)
+
         return image
 
 
