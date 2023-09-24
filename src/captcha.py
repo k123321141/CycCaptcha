@@ -10,7 +10,7 @@ class SimpleCaptcha(object):
     def __init__(self, fonts):
         self._width = 136
         self._height = 50
-        self._fonts = fonts
+        self._fonts = [font for font in fonts if 'PublicSans-SemiBoldItalic' in font]
         self.font_sizes = 42
         self.truefonts = tuple([
             truetype(n, self.font_sizes)
@@ -57,8 +57,8 @@ class SimpleCaptcha(object):
 
     def add_line_noise(self, image, draw):
         color = self.random_line_color()
-        x1 = random.randint(0, self._width - 1)
-        y1 = random.randint(0, self._height - 1)
+        x1 = random.randint(-50, self._width - 1)
+        y1 = random.randint(-50, self._height - 1)
         x2 = random.randint(x1 + 1, self._width)
         y2 = random.randint(y1 + 1, self._height)
         draw.line(
@@ -85,14 +85,15 @@ class SimpleCaptcha(object):
         image = self.background(self._width, self._height)
 
         draw = Draw(image)
-        for i in range(75):
+        for i in range(45):
             self.add_line_noise(image, draw)
 
         r_arr = [20, 50, 80, 100, 110]
         g_arr = [50, 50, 20, 20, 20]
-        b_arr = [196, 150, 120, 70, 50]
+        b_arr = [216, 180, 120, 70, 50]
 
-        y = random.randint(2, 4)
+        # y = random.randint(-2, 4)
+        y = 0
         base_x = random.randint(2, 4)
         font = random.choice(self.truefonts)
         for i, c in enumerate(chars):
@@ -102,11 +103,13 @@ class SimpleCaptcha(object):
             img = self._generate_char(c, color=(r, g, b), draw=draw, font=font)
 
             w, h = img.size
-            x = base_x + i * 23
+            x = base_x + i * 25 + random.randint(-2, 2)
             image.paste(img, (x, y), mask=img)  # alpha = 0
 
         for i in range(200):
             self.add_dot_noise(image, draw)
+        for i in range(15):
+            self.add_line_noise(image, draw)
 
         image = image.resize((68, 25), PIL.Image.BICUBIC)
         return image
@@ -278,7 +281,7 @@ class HardCaptcha(SimpleCaptcha):
         self.add_line_noise(image, draw)
         self.add_curve_noise(image, draw)
 
-        for i in range(70):
+        for i in range(100):
             super().add_line_noise(image, draw)
 
         y = random.randint(-2, 4)
@@ -304,7 +307,8 @@ class HardCaptcha(SimpleCaptcha):
             super().add_line_noise(image, draw)
         # image = image.filter(ImageFilter.GaussianBlur(random.uniform(0, 0.5)))
         # image = image.resize((203, 66), PIL.Image.BICUBIC)
-        image = image.resize((self._width, self._height), PIL.Image.BICUBIC)
+        image = image.filter(ImageFilter.SMOOTH_MORE)
+        # image = image.resize((self._width, self._height), PIL.Image.BICUBIC)
         if random.random() < 0.5:
             image = image.filter(ImageFilter.SMOOTH)
         else:

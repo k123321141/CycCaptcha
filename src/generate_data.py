@@ -13,9 +13,10 @@ VALID_CHARS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 def output_random_image(n: int, fonts: list, length: int, output_dir: str, invalid_set: set, verbose: bool):
     global VALID_CHARS
-    image = captcha.HardCaptcha(fonts=fonts)
+    image = captcha.SimpleCaptcha(fonts=fonts)
     for i in tqdm(range(n)):
         label = ''.join(random.choices(VALID_CHARS, k=length))
+        # label = '25812'
         while label in invalid_set:
             label = ''.join(random.choices(VALID_CHARS, k=length))
         invalid_set.add(label)
