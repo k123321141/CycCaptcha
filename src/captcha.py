@@ -123,7 +123,7 @@ class SimpleCaptcha(object):
         image = image.filter(ImageFilter.SHARPEN)
         image = image.filter(ImageFilter.SHARPEN)
         # image = image.resize((68, 25), PIL.Image.BICUBIC)
-        image = image.resize((68, 25), PIL.Image.BICUBIC)
+        image = image.resize((610, 224), PIL.Image.BICUBIC)
         return image
 
 
