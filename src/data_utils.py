@@ -1,4 +1,3 @@
-from logger import logger
 import torch
 import os
 import numpy as np
@@ -23,7 +22,7 @@ def expand2square(pil_img, background_color):
 class CaptchaDataset(torch.utils.data.Dataset):
     def __init__(self, dir_path: str):
         self.file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.gif')]
-        logger.info(f'Start loading images from {dir_path}, count: {len(self.file_list)}')
+        print(f'Start loading images from {dir_path}, count: {len(self.file_list)}')
         self.label = [os.path.basename(f).split('.')[0] for f in self.file_list]
         self.img_list = []
 
