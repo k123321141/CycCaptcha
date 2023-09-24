@@ -158,6 +158,10 @@ def main():
                 if (overall_step + 1) % args.gradient_accumulation == 0:
                     optimizer.step()
                     optimizer.zero_grad()
+                if (overall_step + 1) % 1000 == 0:
+                    if not os.path.isdir(args.output):
+                        os.makedirs(args.output)
+                    torch.save(model.state_dict(), os.path.join(args.output, 'iter_{}.model'.format(overall_step)))
                 if (overall_step + 1) % args.log_step == 0:
                     #  validation
                     with torch.no_grad():
@@ -205,11 +209,6 @@ def main():
                 pbar.set_postfix(loss=f'{loss.item():.2f}', lr=f'{current_lr:.2e}')
                 pbar.update(1)
                 overall_step += 1
-
-        if not os.path.isdir(args.output):
-            os.makedirs(args.output)
-        if epoch % 1 == 0:
-            torch.save(model.state_dict(), os.path.join(args.output, 'iter_{}.model'.format(overall_step)))
     tb_writer.export_scalars_to_json(os.path.join(args.logdir, "all_scalars.json"))
     print('training finished')
 
