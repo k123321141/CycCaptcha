@@ -16,7 +16,8 @@ def output_random_image(n: int, fonts: list, length: int, output_dir: str, inval
     image = captcha.SimpleCaptcha(fonts=fonts)
     for i in tqdm(range(n)):
         label = ''.join(random.choices(VALID_CHARS, k=length))
-        # label = '25812'
+        if verbose:
+            label = '25812'
         while label in invalid_set:
             label = ''.join(random.choices(VALID_CHARS, k=length))
         invalid_set.add(label)

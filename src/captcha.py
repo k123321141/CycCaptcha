@@ -12,10 +12,10 @@ class SimpleCaptcha(object):
         self._height = 50
         self._fonts = [font for font in fonts if 'PublicSans-SemiBoldItalic' in font]
         self.font_sizes = 42
-        self.truefonts = tuple([
+        self.truefonts = [
             truetype(n, self.font_sizes)
             for n in self._fonts
-        ])
+        ]
 
     def write(self, chars, output, blur: bool, verbose: bool, **kwargs):
         im = self.create_captcha_image(chars)
@@ -70,8 +70,9 @@ class SimpleCaptcha(object):
 
     def add_dot_noise(self, image, draw):
         color = self.random_dot_color()
-        x1 = random.randint(0, self._width)
-        y1 = random.randint(0, self._height)
+        x1 = random.randint(-40, self._width)
+        y1 = random.randint(-40, self._height)
+        '''
         x2 = x1 + 1
         y2 = y1 + 1
         draw.ellipse(
@@ -80,6 +81,9 @@ class SimpleCaptcha(object):
             ],
             width=1, fill=color
         )
+        '''
+        font = truetype(self._fonts[0], random.randint(6, 32))
+        draw.text((x1, y1), '.', font=font, fill=color)
 
     def create_captcha_image(self, chars):
         image = self.background(self._width, self._height)
@@ -92,18 +96,20 @@ class SimpleCaptcha(object):
         g_arr = [50, 50, 20, 20, 20]
         b_arr = [216, 180, 120, 70, 50]
 
-        # y = random.randint(-2, 4)
-        y = 0
+        for i in range(100):
+            self.add_dot_noise(image, draw)
+        # image = image.filter(ImageFilter.SMOOTH)
+        y = random.randint(-2, 4)
         base_x = random.randint(2, 4)
         font = random.choice(self.truefonts)
         for i, c in enumerate(chars):
-            r = int(min(max(0, r_arr[i] + random.normalvariate(20, 5)), 255))
-            g = int(min(max(0, g_arr[i] + random.normalvariate(20, 5)), 255))
-            b = int(min(max(0, b_arr[i] + random.normalvariate(20, 5)), 255))
+            r = int(min(max(0, r_arr[i] + random.normalvariate(20, 10)), 255))
+            g = int(min(max(0, g_arr[i] + random.normalvariate(20, 10)), 255))
+            b = int(min(max(0, b_arr[i] + random.normalvariate(20, 10)), 255))
             img = self._generate_char(c, color=(r, g, b), draw=draw, font=font)
 
             w, h = img.size
-            x = base_x + i * 25 + random.randint(-2, 2)
+            x = base_x + i * 23 + random.randint(-4, 4)
             image.paste(img, (x, y), mask=img)  # alpha = 0
 
         for i in range(200):
@@ -111,6 +117,12 @@ class SimpleCaptcha(object):
         for i in range(15):
             self.add_line_noise(image, draw)
 
+        image = image.resize((68 * 10, 25 * 10), PIL.Image.BICUBIC)
+        image = image.filter(ImageFilter.GaussianBlur(1))
+        image = image.filter(ImageFilter.SHARPEN)
+        image = image.filter(ImageFilter.SHARPEN)
+        image = image.filter(ImageFilter.SHARPEN)
+        # image = image.resize((68, 25), PIL.Image.BICUBIC)
         image = image.resize((68, 25), PIL.Image.BICUBIC)
         return image
 
