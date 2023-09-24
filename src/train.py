@@ -101,7 +101,7 @@ def main():
     val_dataset = CaptchaDataset(args.eval_data_dir)
     test_dataset = CaptchaDataset(args.test_data_dir)
 
-    processor = AutoProcessor.from_pretrained("./ckpt/")
+    processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     def _collate_fn(batch):
         return prep_collate_fn(processor, batch)
