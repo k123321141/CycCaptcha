@@ -1,3 +1,6 @@
+## Target
+
+![alt text](https://github.com/k123321141/CycCaptcha/blob/master/data/example.gif?raw=true)
 
 
 ## Getting started
