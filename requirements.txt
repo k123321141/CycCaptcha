@@ -2,7 +2,6 @@ matplotlib==3.7.1
 Pillow==9.4.0
 tensorboard==2.12.2
 tensorboardX==2.6
-tomli==2.0.1
-torch==2.0.0+cu117
-torchvision==0.15.1+cu117
+torch==2.0.0
+torchvision==0.15.
 tqdm==4.65.0

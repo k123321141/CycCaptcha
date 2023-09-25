@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-import captcha
-from tqdm import tqdm
 import argparse
 import os
-from os.path import join
 import random
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from os.path import join
+from cyccaptcha import captcha
 
 
 VALID_CHARS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
