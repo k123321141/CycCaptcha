@@ -9,6 +9,7 @@ install_requires = [
     'torch>=2.0.0',
     'torchvision>=0.15.1',
     'tqdm>=4.65.0',
+    'transformers>=4.29.2',
 ]
 
 
