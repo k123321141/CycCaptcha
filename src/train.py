@@ -75,7 +75,7 @@ def main():
     parser.add_argument('--batch_size', default=128, type=int, required=False)
     parser.add_argument('--eval_batch_size', default=128, type=int, required=False)
     parser.add_argument('--lr', default=5e-5, type=float, required=False)
-    parser.add_argument('--log_step', default=20, type=int, required=False)
+    parser.add_argument('--log_step', default=50, type=int, required=False)
     parser.add_argument('--gradient_accumulation', default=1, type=int, required=False)
     parser.add_argument('-o', '--output', default='./save_models/', type=str, required=False, help='model output path.')
     parser.add_argument('--logdir', default='./logs/dev', type=str, required=False)
@@ -104,6 +104,7 @@ def main():
     val_dataset = CaptchaDataset(args.eval_data_dir)
     test_dataset = CaptchaDataset(args.test_data_dir)
 
+    # processor = AutoProcessor.from_pretrained("./ckpt")
     processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     def _collate_fn(batch):
@@ -124,7 +125,7 @@ def main():
     val_G = _generator_fn(val_dataloader)
     test_dataloader = torch.utils.data.DataLoader(
         test_dataset,
-        batch_size=args.eval_batch_size, shuffle=False,
+        batch_size=args.eval_batch_size, shuffle=True,
         num_workers=args.worker,
         collate_fn=_collate_fn,
     )
@@ -142,6 +143,7 @@ def main():
 
     # default value
     criterion = nn.CrossEntropyLoss()
+    best_acc = 0
 
     for epoch in range(args.epochs):
         with tqdm(total=len(dataloader)) as pbar:
@@ -158,10 +160,6 @@ def main():
                 if (overall_step + 1) % args.gradient_accumulation == 0:
                     optimizer.step()
                     optimizer.zero_grad()
-                if (overall_step + 1) % 1000 == 0:
-                    if not os.path.isdir(args.output):
-                        os.makedirs(args.output)
-                    torch.save(model.state_dict(), os.path.join(args.output, 'iter_{}.model'.format(overall_step)))
                 if (overall_step + 1) % args.log_step == 0:
                     #  validation
                     with torch.no_grad():
@@ -204,6 +202,12 @@ def main():
                             'train': current_lr,
                         }, overall_step)
 
+                        if test_acc > best_acc:
+                            best_acc = test_acc
+                            if os.path.isdir(args.output):
+                                shutil.rmtree(args.output)
+                            os.makedirs(args.output)
+                            torch.save(model.state_dict(), os.path.join(args.output, f'iter_{overall_step}_acc_{best_acc*100:.1f}.model'))
                     for writer in tb_writer.all_writers.values():
                         writer.flush()
                 pbar.set_postfix(loss=f'{loss.item():.2f}', lr=f'{current_lr:.2e}')
