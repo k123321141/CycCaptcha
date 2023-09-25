@@ -10,6 +10,8 @@ install_requires = [
     'torchvision>=0.15.1',
     'tqdm>=4.65.0',
     'transformers>=4.29.2',
+    'protobuf==3.20.0',
+    'numpy<=1.20.0',
 ]
 
 
