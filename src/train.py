@@ -5,12 +5,13 @@ import shutil
 import numpy as np
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from data_utils import CaptchaDataset, prep_collate_fn
+from data_utils import CaptchaDataset
 from models import CLIPClassifier, CNNClassifier
 import torch.nn.functional as F
 import torch.nn as nn
 from generate_data import VALID_CHARS
 from transformers import AutoProcessor
+import torchvision.transforms as T
 
 
 def _generator_fn(it_obj):
@@ -70,12 +71,11 @@ def main():
     parser.add_argument('--data_dir', default='/tmp/train/', type=str, required=False)
     parser.add_argument('--eval_data_dir', default='/tmp/val/', type=str, required=False)
     parser.add_argument('--test_data_dir', default='/tmp/test/', type=str, required=False)
-    parser.add_argument('--epochs', default=100, type=int, required=False)
-    parser.add_argument('--warmup_epochs', default=1, type=float, required=False)
-    parser.add_argument('--batch_size', default=128, type=int, required=False)
-    parser.add_argument('--eval_batch_size', default=128, type=int, required=False)
+    parser.add_argument('--steps', default=int(1e3), type=int, required=False)
+    parser.add_argument('--batch_size', default=512, type=int, required=False)
+    parser.add_argument('--eval_batch_size', default=512, type=int, required=False)
     parser.add_argument('--lr', default=5e-5, type=float, required=False)
-    parser.add_argument('--log_step', default=50, type=int, required=False)
+    parser.add_argument('--log_step', default=5, type=int, required=False)
     parser.add_argument('--gradient_accumulation', default=1, type=int, required=False)
     parser.add_argument('-o', '--output', default='./save_models/', type=str, required=False, help='model output path.')
     parser.add_argument('--logdir', default='./logs/dev', type=str, required=False)
@@ -100,15 +100,51 @@ def main():
                 os.remove(os.path.join(args.logdir, sub_dir))
     tb_writer = SummaryWriter(logdir=args.logdir)
 
-    train_dataset = CaptchaDataset(args.data_dir)
-    val_dataset = CaptchaDataset(args.eval_data_dir)
-    test_dataset = CaptchaDataset(args.test_data_dir)
+    train_dataset = CaptchaDataset(args.data_dir, not args.cnn)
+    val_dataset = CaptchaDataset(args.eval_data_dir, not args.cnn)
+    test_dataset = CaptchaDataset(args.test_data_dir, not args.cnn)
 
     # processor = AutoProcessor.from_pretrained("./ckpt")
-    processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-    def _collate_fn(batch):
-        return prep_collate_fn(processor, batch)
+    if args.cnn:
+        model = CNNClassifier(len(VALID_CHARS), 5)
+        processor = T.Compose([
+            T.ToTensor(),
+            T.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            )
+        ])
+
+        def _collate_fn(batch):
+            label_list = []
+            tensor_list = []
+            for label, img in batch:
+                label_list.append([int(c) for c in label])
+                img_tensor = processor(img)
+                tensor_list.append(img_tensor)
+
+            # to Tensor
+            label_tensor = torch.LongTensor(label_list)
+            inputs = torch.stack(tensor_list)
+            return label_tensor, inputs, np.array(img).swapaxes(0, 2).swapaxes(1, 2)
+    else:
+        model = CLIPClassifier(len(VALID_CHARS), 5)
+        processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+        def _collate_fn(batch):
+            label_list = []
+            img_list = []
+            for label, img in batch:
+                label_list.append([int(c) for c in label])
+                img_list.append(img)
+
+            inputs = processor(images=img_list, return_tensors="pt")
+
+            # to Tensor
+            label_tensor = torch.LongTensor(label_list)
+            return label_tensor, inputs, np.array(img_list[0]).swapaxes(0, 2).swapaxes(1, 2)
+    model.to(device)
 
     dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -116,6 +152,7 @@ def main():
         num_workers=args.worker,
         collate_fn=_collate_fn,
     )
+    train_G = _generator_fn(dataloader)
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.eval_batch_size, shuffle=True,
@@ -130,90 +167,88 @@ def main():
         collate_fn=_collate_fn,
     )
     test_G = _generator_fn(test_dataloader)
-    if args.cnn:
-        model = CNNClassifier(len(VALID_CHARS), 5)
-    else:
-        model = CLIPClassifier(len(VALID_CHARS), 5)
-    model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     print('starting training')
-    overall_step = 0
 
     # default value
     criterion = nn.CrossEntropyLoss()
     best_acc = 0
 
-    for epoch in range(args.epochs):
-        with tqdm(total=len(dataloader)) as pbar:
-            for label, X, X_img in dataloader:
-                model.train()
-                current_lr = optimizer.param_groups[0]['lr']
+    test_char_acc = test_acc = 0
+    test_loss = torch.Tensor([999])
+    current_lr = optimizer.param_groups[0]['lr']
+    with tqdm(total=args.steps) as pbar:
+        for overall_step in range(args.steps):
+            label, X, X_img = next(train_G)
+            model.train()
+            current_lr = optimizer.param_groups[0]['lr']
 
-                # loss
-                logits, loss = calc_loss(criterion, model, X, label, device)
-                grad_loss = loss / args.gradient_accumulation
-                grad_loss.backward()
+            # loss
+            logits, loss = calc_loss(criterion, model, X, label, device)
+            grad_loss = loss / args.gradient_accumulation
+            grad_loss.backward()
 
-                #  optimizer step
-                if (overall_step + 1) % args.gradient_accumulation == 0:
-                    optimizer.step()
-                    optimizer.zero_grad()
-                if (overall_step + 1) % args.log_step == 0:
-                    #  validation
-                    with torch.no_grad():
-                        model.eval()
+            #  optimizer step
+            if (overall_step + 1) % args.gradient_accumulation == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+            if (overall_step + 1) % args.log_step == 0:
+                #  validation
+                with torch.no_grad():
+                    model.eval()
 
-                        logits, loss = calc_loss(criterion, model, X, label, device)
-                        train_acc, train_char_acc, train_pred, train_true = accuracy(logits, label)
-                        tb_writer.add_image('train_pred', X_img, overall_step)
-                        tb_writer.add_text('train', f'{train_true[0]} --> [{train_pred[0]}]', overall_step)
+                    logits, loss = calc_loss(criterion, model, X, label, device)
+                    train_acc, train_char_acc, train_pred, train_true = accuracy(logits, label)
+                    tb_writer.add_image('train_pred', X_img, overall_step)
+                    tb_writer.add_text('train', f'{train_true[0]} --> [{train_pred[0]}]', overall_step)
 
-                        eval_label, eval_X, eval_X_img = next(val_G)
-                        eval_logits, eval_loss = calc_loss(criterion, model, eval_X, eval_label, device)
-                        eval_acc, eval_char_acc, eval_pred, eval_true = accuracy(eval_logits, eval_label)
-                        tb_writer.add_image('eval_pred', eval_X_img, overall_step)
-                        tb_writer.add_text('eval', f'{eval_true[0]} --> [{eval_pred[0]}]', overall_step)
+                    eval_label, eval_X, eval_X_img = next(val_G)
+                    eval_logits, eval_loss = calc_loss(criterion, model, eval_X, eval_label, device)
+                    eval_acc, eval_char_acc, eval_pred, eval_true = accuracy(eval_logits, eval_label)
+                    tb_writer.add_image('eval_pred', eval_X_img, overall_step)
+                    tb_writer.add_text('eval', f'{eval_true[0]} --> [{eval_pred[0]}]', overall_step)
 
-                        test_label, test_X, test_X_img = next(test_G)
-                        test_logits, test_loss = calc_loss(criterion, model, test_X, test_label, device)
-                        test_acc, test_char_acc, test_pred, test_true = accuracy(test_logits, test_label)
-                        tb_writer.add_image('test_pred', test_X_img, overall_step)
-                        tb_writer.add_text('test', f'{test_true[0]} --> [{test_pred[0]}]', overall_step)
+                    test_label, test_X, test_X_img = next(test_G)
+                    test_logits, test_loss = calc_loss(criterion, model, test_X, test_label, device)
+                    test_acc, test_char_acc, test_pred, test_true = accuracy(test_logits, test_label)
+                    tb_writer.add_image('test_pred', test_X_img, overall_step)
+                    tb_writer.add_text('test', f'{test_true[0]} --> [{test_pred[0]}]', overall_step)
 
-                        tb_writer.add_scalars('loss', {
-                            'train': loss.item(),
-                            'val': eval_loss.item(),
-                            'test': test_loss.item(),
-                        }, overall_step)
-                        tb_writer.add_scalars('accuracy', {
-                            'train': train_acc,
-                            'val': eval_acc,
-                            'test': test_acc,
-                        }, overall_step)
-                        tb_writer.add_scalars('char_accuracy', {
-                            'train': train_char_acc,
-                            'val': eval_char_acc,
-                            'test': test_char_acc,
-                        }, overall_step)
+                    tb_writer.add_scalars('loss', {
+                        'train': loss.item(),
+                        'val': eval_loss.item(),
+                        'test': test_loss.item(),
+                    }, overall_step)
+                    tb_writer.add_scalars('accuracy', {
+                        'train': train_acc,
+                        'val': eval_acc,
+                        'test': test_acc,
+                    }, overall_step)
+                    tb_writer.add_scalars('char_accuracy', {
+                        'train': train_char_acc,
+                        'val': eval_char_acc,
+                        'test': test_char_acc,
+                    }, overall_step)
 
-                        tb_writer.add_scalars('lr', {
-                            'train': current_lr,
-                        }, overall_step)
+                    tb_writer.add_scalars('lr', {
+                        'train': current_lr,
+                    }, overall_step)
 
-                        if test_acc > best_acc:
-                            best_acc = test_acc
-                            if os.path.isdir(args.output):
-                                shutil.rmtree(args.output)
-                            os.makedirs(args.output)
-                            torch.save(model.state_dict(), os.path.join(args.output, f'iter_{overall_step}_acc_{best_acc*100:.1f}.model'))
-                    for writer in tb_writer.all_writers.values():
-                        writer.flush()
-                pbar.set_postfix(loss=f'{loss.item():.2f}', lr=f'{current_lr:.2e}')
-                pbar.update(1)
-                overall_step += 1
-    tb_writer.export_scalars_to_json(os.path.join(args.logdir, "all_scalars.json"))
+                    if eval_acc > best_acc:
+                        best_acc = eval_acc
+                        if os.path.isdir(args.output):
+                            shutil.rmtree(args.output)
+                        os.makedirs(args.output)
+                        filename = os.path.join(args.output, f'iter_{overall_step}_acc_{best_acc*100:.1f}.model')
+                        print(f'save file to {filename}')
+                        torch.save(model.state_dict(), filename)
+                    tb_writer.flush()
+            pbar.set_postfix(loss=f'{loss.item():.2f}', lr=f'{current_lr:.2e}, test_loss={test_loss.item():.2f}, test_char_acc={test_char_acc*100:.1f}, test_acc={test_acc*100:.1f}')
+            pbar.update(1)
+    tb_writer.close()
+
     print('training finished')
 
 

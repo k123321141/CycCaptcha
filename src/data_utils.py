@@ -1,6 +1,5 @@
 import torch
 import os
-import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
@@ -20,7 +19,7 @@ def expand2square(pil_img, background_color):
 
 
 class CaptchaDataset(torch.utils.data.Dataset):
-    def __init__(self, dir_path: str):
+    def __init__(self, dir_path: str, square: bool):
         self.file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.gif')]
         print(f'Start loading images from {dir_path}, count: {len(self.file_list)}')
         self.label = [os.path.basename(f).split('.')[0] for f in self.file_list]
@@ -29,7 +28,8 @@ class CaptchaDataset(torch.utils.data.Dataset):
         for f in tqdm(self.file_list):
             with Image.open(f) as img:
                 img = img.convert('RGB')
-            img = expand2square(img, (255, 255, 255))
+            if square:
+                img = expand2square(img, (255, 255, 255))
             self.img_list.append(img)
 
     def __len__(self):
@@ -40,17 +40,3 @@ class CaptchaDataset(torch.utils.data.Dataset):
         label = self.label[idx]
         img = self.img_list[idx]
         return label, img
-
-
-def prep_collate_fn(processor, batch):
-    label_list = []
-    img_list = []
-    for label, img in batch:
-        label_list.append([int(c) for c in label])
-        img_list.append(img)
-
-    inputs = processor(images=img_list, return_tensors="pt")
-
-    # to Tensor
-    label_tensor = torch.LongTensor(label_list)
-    return label_tensor, inputs, np.array(img_list[0]).swapaxes(0, 2).swapaxes(1, 2)

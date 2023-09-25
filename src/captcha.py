@@ -143,7 +143,8 @@ class HardCaptcha(SimpleCaptcha):
 
     def __init__(self, fonts):
         super().__init__(fonts)
-        self.chars = ['@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+        self.chars = ['@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c',
+                      'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
         self.table = []
         for i in range(256):
@@ -204,7 +205,7 @@ class HardCaptcha(SimpleCaptcha):
         h2 = h + abs(y1) + abs(y2)
         im = im.resize((w2, h2))
         # im = im.resize((random.randint(250, 350), random.randint(150, 250)))
-        im = im.resize((int(w2*factor), int(h2*factor)), PIL.Image.BILINEAR)
+        im = im.resize((int(max(1, w2 * factor)), max(1, int(h2 * factor))), PIL.Image.BILINEAR)
 
         return im
 
@@ -243,12 +244,12 @@ class HardCaptcha(SimpleCaptcha):
         offset = 2
         for i in range(0, 50):
 
-            Draw(im).arc([i*2*r, 0, (i*2)*r + r, r], 270, 0, width=w, fill=color)
-            Draw(im).arc([(i*2)*r + r - offset, 0, (i+1)*2*r, r], 90, 180, width=w, fill=color)
-            Draw(im).arc([(i*2)*r + r - offset, 0, (i+1)*2*r, r], 0, 90, width=w, fill=color)
-            Draw(im).arc([(i+1)*2*r - offset, 0, (i+1)*2*r+r + offset, r], 180, 270, width=w, fill=color)
+            Draw(im).arc([i * 2 * r, 0, (i * 2) * r + r, r], 270, 0, width=w, fill=color)
+            Draw(im).arc([(i * 2) * r + r - offset, 0, (i + 1) * 2 * r, r], 90, 180, width=w, fill=color)
+            Draw(im).arc([(i * 2) * r + r - offset, 0, (i + 1) * 2 * r, r], 0, 90, width=w, fill=color)
+            Draw(im).arc([(i + 1) * 2 * r - offset, 0, (i + 1) * 2 * r + r + offset, r], 180, 270, width=w, fill=color)
         im = im.crop(im.getbbox())
-        im = im.resize((int(1624*(1+freq)), height), PIL.Image.BICUBIC)
+        im = im.resize((int(1624 * (1 + freq)), height), PIL.Image.BICUBIC)
         return im
 
     def add_curve_noise(self, image, draw):
@@ -256,7 +257,7 @@ class HardCaptcha(SimpleCaptcha):
         if mode == 'thin':
             img = self._generate_curve(draw, random.uniform(0.3, 1), random.randint(100, 900))
             x = 0
-            y = random.randint(-self._height//2, self._height//2)
+            y = random.randint(-self._height // 2, self._height // 2)
         elif mode == 'normal':
             img = self._generate_curve(draw, random.uniform(1, 10), random.randint(400, 900))
             x = random.randint(-50, 0)
@@ -268,7 +269,7 @@ class HardCaptcha(SimpleCaptcha):
         elif mode == 'flat':
             img = self._generate_curve(draw, random.uniform(50, 90), random.randint(100, 400))
             x = int(-2500 * random.random())
-            y = random.randint(-self._height//2, self._height//2)
+            y = random.randint(-self._height // 2, self._height // 2)
 
         w, h = img.size
         image.paste(img, (x, y), mask=img)
@@ -333,11 +334,6 @@ class HardCaptcha(SimpleCaptcha):
         # image = image.resize((203, 66), PIL.Image.BICUBIC)
         image = image.filter(ImageFilter.SMOOTH_MORE)
         # image = image.resize((self._width, self._height), PIL.Image.BICUBIC)
-        if random.random() < 0.5:
-            image = image.filter(ImageFilter.SMOOTH)
-        else:
-            image = image.filter(ImageFilter.SMOOTH_MORE)
         image = image.resize((self._width * 4, self._height * 4), PIL.Image.BICUBIC)
-        if random.random() < 0.5:
-            image = image.filter(ImageFilter.SMOOTH)
+        image = image.resize((self._width, self._height), PIL.Image.BICUBIC)
         return image
