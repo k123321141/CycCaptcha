@@ -11,7 +11,7 @@ import glob
 if __name__ == '__main__':
     model = cyccaptcha.models.CNNClassifier(10, 5)
     model.load_state_dict(torch.load('./cnn_iter_349_acc_100.0.model', map_location=torch.device('cpu')))
-
+    model.eval()
     processor = T.Compose([
         T.ToTensor(),
         T.Normalize(
@@ -32,7 +32,8 @@ if __name__ == '__main__':
             pred_list = cyccaptcha.train.logits2str(logits)
             pred = pred_list[0]
             cost = time.time() - start
-            result = pred == os.path.basename(filename).split('.')[0]
-            print(f'Predicted: {pred_list}, cost: {cost:.2f}s, result: {result}')
+            true = os.path.basename(filename).split('.')[0]
+            result = pred == true
+            print(f'Predicted: {pred}, cost: {cost:.2f}s, result: {result} {"" if result else true}')
             hit += 1 if result else 0
     print(f'Accuracy: {hit / len(file_list) * 100:.2f}%')

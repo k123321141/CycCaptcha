@@ -5,7 +5,7 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from os.path import join
-from cyccaptcha import captcha
+from . import captcha
 
 
 VALID_CHARS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']

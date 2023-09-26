@@ -6,9 +6,9 @@ import numpy as np
 import torch.nn.functional as F
 import torchvision.transforms as T
 import torch.nn as nn
-from cyccaptcha.data_utils import CaptchaDataset
-from cyccaptcha.models import CLIPClassifier, CNNClassifier
-from cyccaptcha.generate_data import VALID_CHARS
+from .data_utils import CaptchaDataset
+from .models import CLIPClassifier, CNNClassifier
+from .generate_data import VALID_CHARS
 from transformers import AutoProcessor
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
