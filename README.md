@@ -28,8 +28,10 @@ import cyccaptcha
 from PIL import Image
 import time
 
-
+print('Init model')
 model = cyccaptcha.models.CNNClassifier(10, 5)
+
+print('Load model')
 model.load_state_dict(torch.load('/tmp/cyc_model.bin', map_location=torch.device('cpu')))
 model.eval()
 processor = T.Compose([
@@ -39,6 +41,7 @@ processor = T.Compose([
         std=[0.229, 0.224, 0.225]
     )
 ])
+print('Start inference')
 filename = '/tmp/example.gif'
 with torch.no_grad():
     with Image.open(filename) as img:
@@ -53,7 +56,6 @@ cost = time.time() - start
 true = '33583'
 result = pred == true
 print(f'Predicted: {pred}, cost: {cost:.2f}s, result: {result} {"" if result else true}')
-
 ```
 ## Training
 
