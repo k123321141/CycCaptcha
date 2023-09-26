@@ -16,7 +16,7 @@ pip install git+https://github.com/k123321141/CycCaptcha.git@master
 wget https://huggingface.co/Payo/cyc_captcha/resolve/main/pytorch_model.bin -O /tmp/cyc_model.bin
 
 # download example
-wget https://raw.githubusercontent.com/k123321141/CycCaptcha/master/data/example.gif\?raw\=true -O ~/Desktop/example.gif
+wget https://raw.githubusercontent.com/k123321141/CycCaptcha/master/data/example.gif -O /tmp/example.gif
 
 ```
 
