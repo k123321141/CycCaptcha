@@ -1,5 +1,6 @@
 import torch
 import os
+import json
 import argparse
 import shutil
 import numpy as np
@@ -66,8 +67,17 @@ def calc_loss(criterion, model, X, label, device):
     return logits, loss
 
 
+class ThresholdTransform(object):
+    def __init__(self, thr_255):
+        self.thr = thr_255 / 255.  # input threshold for [0..255] gray level, convert to [0..1]
+
+    def __call__(self, x):
+        return (x > self.thr).to(x.dtype)  # do not change the data type
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--vocab', default='/tmp/vocab.json', type=str, required=False)
     parser.add_argument('--data_dir', default='/tmp/train/', type=str, required=False)
     parser.add_argument('--eval_data_dir', default='/tmp/val/', type=str, required=False)
     parser.add_argument('--test_data_dir', default='/tmp/test/', type=str, required=False)
@@ -105,22 +115,22 @@ def main():
     test_dataset = CaptchaDataset(args.test_data_dir, not args.cnn)
 
     # processor = AutoProcessor.from_pretrained("./ckpt")
+    with open(args.vocab, 'r') as f:
+        vocab = json.load(f)
 
     if args.cnn:
-        model = CNNClassifier(len(VALID_CHARS), 5)
+        model = CNNClassifier(len(vocab), 20)
         processor = T.Compose([
+            T.Grayscale(),
             T.ToTensor(),
-            T.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
+            ThresholdTransform(thr_255=127),
         ])
 
         def _collate_fn(batch):
             label_list = []
             tensor_list = []
             for label, img in batch:
-                label_list.append([int(c) for c in label])
+                label_list.append([vocab[c] for c in label])
                 img_tensor = processor(img)
                 tensor_list.append(img_tensor)
 
