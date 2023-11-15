@@ -67,18 +67,18 @@ class CNNClassifier(nn.Module):
     def __init__(self, n_category: int, n_digits: int, *args, **kwargs):
         super(CNNClassifier, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(1, 8, kernel_size=3, padding=1),
+            nn.BatchNorm2d(8),
             nn.Dropout(0.1),  # drop 10% of the neuron
             nn.ReLU(),
         )
-        self.blocks = nn.ModuleList([ResidualBlock(2 ** (i + 5), 2 ** (i + 6)) for i in range(4)])
+        self.blocks = nn.ModuleList([ResidualBlock(2 ** (i + 3), 2 ** (i + 4)) for i in range(5)])
         # self.blocks = nn.ModuleList([
         # CNNBlock(2 ** (i + 5), 2 ** (i + 6)) for i in range(3)
         # ])
 
         self.fc = nn.Sequential(
-            nn.Linear(1 * 4 * 512, 1024),
+            nn.Linear(4 * 4 * 256, 1024),
             # nn.Linear(3 * 8 * 256, 1024),
             nn.Dropout(0.1),  # drop 10% of the neuron
             nn.ReLU())
@@ -93,44 +93,7 @@ class CNNClassifier(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.fc(out)
         emb = out
-
-        output_list = [fc(emb).unsqueeze(1) for fc in self.layers]
-        output = torch.cat(output_list, dim=1)
-        return output
-
-
-class CNNDecoder(nn.Module):
-
-    def __init__(self, n_category: int, n_digits: int, *args, **kwargs):
-        super(CNNClassifier, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=1, padding=1),
-            nn.BatchNorm2d(32),
-            nn.Dropout(0.1),  # drop 10% of the neuron
-            nn.ReLU(),
-        )
-        self.blocks = nn.ModuleList([ResidualBlock(2 ** (i + 5), 2 ** (i + 6)) for i in range(4)])
-        # self.blocks = nn.ModuleList([
-        # CNNBlock(2 ** (i + 5), 2 ** (i + 6)) for i in range(3)
-        # ])
-
-        self.fc = nn.Sequential(
-            nn.Linear(1 * 4 * 512, 1024),
-            # nn.Linear(3 * 8 * 256, 1024),
-            nn.Dropout(0.1),  # drop 10% of the neuron
-            nn.ReLU())
-        self.layers = nn.ModuleList([nn.Linear(1024, n_category) for i in range(n_digits)])
-
-    def forward(self, x):
-        if not isinstance(x, torch.Tensor):
-            x = x['pixel_values']
-        out = self.layer1(x)
-        for block in self.blocks:
-            out = block(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-        emb = out
-
+        
         output_list = [fc(emb).unsqueeze(1) for fc in self.layers]
         output = torch.cat(output_list, dim=1)
         return output

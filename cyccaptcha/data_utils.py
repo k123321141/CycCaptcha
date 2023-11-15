@@ -1,6 +1,7 @@
 import torch
 import os
 from PIL import Image
+import tarfile
 from tqdm import tqdm
 
 
@@ -19,18 +20,23 @@ def expand2square(pil_img, background_color):
 
 
 class CaptchaDataset(torch.utils.data.Dataset):
-    def __init__(self, dir_path: str, square: bool):
-        self.file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.gif')]
-        print(f'Start loading images from {dir_path}, count: {len(self.file_list)}')
-        self.label = [os.path.basename(f).split('.')[0] for f in self.file_list]
+    def __init__(self, tar_path: str, square: bool):
+        # self.file_list = [os.path.join(dir_path, f) for f in os.listdir(dir_path) if f.endswith('.gif')][:1000]
+        # print(f'Start loading images from {dir_path}, count: {len(self.file_list)}')
+        self.label = []
         self.img_list = []
-
-        for f in tqdm(self.file_list):
-            with Image.open(f) as img:
-                img = img.convert('RGB')
-            if square:
-                img = expand2square(img, (255, 255, 255))
-            self.img_list.append(img)
+        with tarfile.open(tar_path) as tar:
+            for member in tqdm(tar.getmembers()):
+                fname = member.name
+                label = os.path.basename(fname).split('.')[0]
+                if not fname.endswith('.gif'):
+                    continue
+                with Image.open(tar.extractfile(member)) as img:
+                    img = img.convert('RGB')
+                if square:
+                    img = expand2square(img, (255, 255, 255))
+                self.img_list.append(img)
+                self.label.append(label)
 
     def __len__(self):
         return len(self.img_list)

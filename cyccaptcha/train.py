@@ -7,9 +7,9 @@ import numpy as np
 import torch.nn.functional as F
 import torchvision.transforms as T
 import torch.nn as nn
-from .data_utils import CaptchaDataset
-from .models import CLIPClassifier, CNNClassifier
-from .generate_data import VALID_CHARS
+from torchvision.transforms import v2
+from data_utils import CaptchaDataset
+from models import CLIPClassifier, CNNClassifier
 from transformers import AutoProcessor
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
@@ -21,22 +21,22 @@ def _generator_fn(it_obj):
             yield x
 
 
-def logits2str(logits):
+def logits2str(logits, inv_vocab):
     logits = logits.detach().cpu().numpy()
     pred = np.argmax(logits, axis=2)
-    str_list = [''.join(map(str, idx_list)) for idx_list in pred.tolist()]
+    str_list = [''.join(map(inv_vocab.get, idx_list)) for idx_list in pred.tolist()]
     return str_list
 
 
-def label2str(label):
+def label2str(label, inv_vocab):
     label = label.detach().cpu().numpy()
-    str_list = [''.join(map(str, idx_list)) for idx_list in label.tolist()]
+    str_list = [''.join(map(inv_vocab.get, idx_list)) for idx_list in label.tolist()]
     return str_list
 
 
-def accuracy(logits, label):
-    pred_list = logits2str(logits)
-    true_list = label2str(label)
+def accuracy(logits, label, inv_vocab):
+    pred_list = logits2str(logits, inv_vocab)
+    true_list = label2str(label, inv_vocab)
 
     hit = 0
     char_hit = 0
@@ -55,6 +55,7 @@ def accuracy(logits, label):
 
     acc = hit / len(true_list)
     char_acc = char_hit / char_count
+
     return acc, char_acc, pred_list, true_list
 
 
@@ -81,10 +82,10 @@ def main():
     parser.add_argument('--data_dir', default='/tmp/train/', type=str, required=False)
     parser.add_argument('--eval_data_dir', default='/tmp/val/', type=str, required=False)
     parser.add_argument('--test_data_dir', default='/tmp/test/', type=str, required=False)
-    parser.add_argument('--steps', default=int(1e3), type=int, required=False)
+    parser.add_argument('--steps', default=int(1e6), type=int, required=False)
     parser.add_argument('--batch_size', default=512, type=int, required=False)
     parser.add_argument('--eval_batch_size', default=512, type=int, required=False)
-    parser.add_argument('--lr', default=5e-5, type=float, required=False)
+    parser.add_argument('--lr', default=1e-4, type=float, required=False)
     parser.add_argument('--log_step', default=5, type=int, required=False)
     parser.add_argument('--gradient_accumulation', default=1, type=int, required=False)
     parser.add_argument('-o', '--output', default='./save_models/', type=str, required=False, help='model output path.')
@@ -117,10 +118,13 @@ def main():
     # processor = AutoProcessor.from_pretrained("./ckpt")
     with open(args.vocab, 'r') as f:
         vocab = json.load(f)
+    inv_vocab = {i + 1: w for w, i in vocab.items()}
+    inv_vocab[0] = ''
 
     if args.cnn:
-        model = CNNClassifier(len(vocab), 20)
+        model = CNNClassifier(len(vocab) + 1, 20)
         processor = T.Compose([
+            v2.RandomResizedCrop(size=(128, 128), scale=(0.5, 1.0)),
             T.Grayscale(),
             T.ToTensor(),
             ThresholdTransform(thr_255=127),
@@ -130,7 +134,7 @@ def main():
             label_list = []
             tensor_list = []
             for label, img in batch:
-                label_list.append([vocab[c] for c in label])
+                label_list.append([vocab[c.lower()] + 1 for c in label] + [0] * (20 - len(label)))
                 img_tensor = processor(img)
                 tensor_list.append(img_tensor)
 
@@ -139,7 +143,7 @@ def main():
             inputs = torch.stack(tensor_list)
             return label_tensor, inputs, np.array(img).swapaxes(0, 2).swapaxes(1, 2)
     else:
-        model = CLIPClassifier(len(VALID_CHARS), 5)
+        model = CLIPClassifier(len(vocab) + 1, 20)
         processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         def _collate_fn(batch):
@@ -154,7 +158,10 @@ def main():
             # to Tensor
             label_tensor = torch.LongTensor(label_list)
             return label_tensor, inputs, np.array(img_list[0]).swapaxes(0, 2).swapaxes(1, 2)
+
     model.to(device)
+    st = torch.load('./ckpt/iter_93759_acc_6.5.model')
+    model.load_state_dict(st)
 
     dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -190,7 +197,7 @@ def main():
     test_loss = torch.Tensor([999])
     current_lr = optimizer.param_groups[0]['lr']
     with tqdm(total=args.steps) as pbar:
-        for overall_step in range(args.steps):
+        for overall_step in range(93759, args.steps):
             label, X, X_img = next(train_G)
             model.train()
             current_lr = optimizer.param_groups[0]['lr']
@@ -210,19 +217,19 @@ def main():
                     model.eval()
 
                     logits, loss = calc_loss(criterion, model, X, label, device)
-                    train_acc, train_char_acc, train_pred, train_true = accuracy(logits, label)
+                    train_acc, train_char_acc, train_pred, train_true = accuracy(logits, label, inv_vocab)
                     tb_writer.add_image('train_pred', X_img, overall_step)
                     tb_writer.add_text('train', f'{train_true[0]} --> [{train_pred[0]}]', overall_step)
 
                     eval_label, eval_X, eval_X_img = next(val_G)
                     eval_logits, eval_loss = calc_loss(criterion, model, eval_X, eval_label, device)
-                    eval_acc, eval_char_acc, eval_pred, eval_true = accuracy(eval_logits, eval_label)
+                    eval_acc, eval_char_acc, eval_pred, eval_true = accuracy(eval_logits, eval_label, inv_vocab)
                     tb_writer.add_image('eval_pred', eval_X_img, overall_step)
                     tb_writer.add_text('eval', f'{eval_true[0]} --> [{eval_pred[0]}]', overall_step)
 
                     test_label, test_X, test_X_img = next(test_G)
                     test_logits, test_loss = calc_loss(criterion, model, test_X, test_label, device)
-                    test_acc, test_char_acc, test_pred, test_true = accuracy(test_logits, test_label)
+                    test_acc, test_char_acc, test_pred, test_true = accuracy(test_logits, test_label, inv_vocab)
                     tb_writer.add_image('test_pred', test_X_img, overall_step)
                     tb_writer.add_text('test', f'{test_true[0]} --> [{test_pred[0]}]', overall_step)
 
